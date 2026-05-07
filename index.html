@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComicReader Free</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --accent: #e50914;
+            --sidebar-w: 260px;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--bg-color); color: #fff;
+            font-family: 'Segoe UI', sans-serif; overflow: hidden;
+        }
+
+        #sidebar {
+            position: fixed; left: calc(var(--sidebar-w) * -1); top: 0;
+            width: var(--sidebar-w); height: 100%;
+            background: #111; border-right: 1px solid #222;
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000;
+            display: flex; flex-direction: column;
+        }
+        #sidebar.open { left: 0; }
+
+        #sidebar-toggle {
+            position: absolute; right: -44px; top: 50%; transform: translateY(-50%);
+            background: #1a1a1a; color: #aaa; border: 1px solid #333;
+            width: 44px; height: 56px; cursor: pointer; border-radius: 0 8px 8px 0;
+            font-size: 1.1rem; display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+        #sidebar-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        #sidebar-tabs {
+            display: flex; border-bottom: 1px solid #222;
+        }
+        .stab {
+            flex: 1; padding: 12px 0; text-align: center; font-size: 11px;
+            font-weight: 700; letter-spacing: 0.08em; cursor: pointer;
+            color: #555; border-bottom: 2px solid transparent;
+            transition: color 0.2s, border-color 0.2s; text-transform: uppercase;
+        }
+        .stab:hover { color: #aaa; }
+        .stab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        #panel-pages { flex-grow: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        .thumb-item { width: 88%; cursor: pointer; border: 2px solid transparent; transition: 0.2s; border-radius: 4px; opacity: 0.6; }
+        .thumb-item:hover { opacity: 1; border-color: #555; }
+        .thumb-item.active { opacity: 1; border-color: var(--accent); background: rgba(229, 9, 20, 0.08); transform: scale(1.04); }
+
+        #panel-info {
+            display: none; flex-grow: 1; overflow-y: auto; padding: 20px 16px;
+            flex-direction: column; gap: 14px;
+        }
+        #panel-info.visible { display: flex; }
+
+        #info-cover-wrap { width: 100%; display: flex; justify-content: center; margin-bottom: 6px; }
+        #info-cover { width: 80%; border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); display: none; }
+
+        .info-title { font-size: 15px; font-weight: 700; color: #fff; line-height: 1.3; text-align: center; }
+        .info-subtitle { font-size: 12px; color: var(--accent); text-align: center; margin-top: -6px; letter-spacing: 0.05em; }
+
+        .info-divider { height: 1px; background: #222; margin: 4px 0; }
+
+        .info-row { display: flex; flex-direction: column; gap: 2px; }
+        .info-row .lbl { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.08em; }
+        .info-row .val { font-size: 13px; color: #ccc; line-height: 1.4; }
+
+        .info-empty { color: #444; font-size: 13px; text-align: center; margin-top: 30px; }
+
+        #reader-page { display: none; flex-direction: column; height: 100vh; transition: margin-left 0.3s; }
+        #reader-page.shifted { margin-left: var(--sidebar-w); }
+
+        header {
+            background: #0e0e0e; padding: 10px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #1e1e1e;
+        }
+        #progress-wrapper { width: 100%; height: 24px; background: #111; cursor: pointer; position: relative; }
+        #progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+        #progress-info { position: absolute; width: 100%; text-align: center; top: 4px; font-size: 11px; pointer-events: none; font-weight: 700; color: #fff; letter-spacing: 0.04em; }
+
+        #viewer-container { flex-grow: 1; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #050505; }
+        .view-canvas { display: flex; gap: 10px; align-items: center; justify-content: center; }
+        .comic-img { max-height: 85vh; max-width: 48vw; object-fit: contain; box-shadow: 0 0 30px rgba(0,0,0,0.7); }
+        .is-cover { max-width: 76vw !important; animation: entradaComic 0.6s ease-out forwards; }
+        @keyframes entradaComic { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
+
+        .hdr-btns { display: flex; gap: 8px; align-items: center; }
+        .dropdown { position: relative; display: inline-block; }
+        .drop-btn {
+            background: #1a1a1a; color: #ccc; border: 1px solid #2a2a2a;
+            padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 12px;
+            transition: background 0.2s, color 0.2s;
+        }
+        .drop-btn:hover { background: #252525; color: #fff; }
+        .drop-content {
+            display: none; position: absolute; background: #1a1a1a; min-width: 160px;
+            top: calc(100% + 4px); right: 0; border: 1px solid #2a2a2a; border-radius: 4px; z-index: 1100;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        .dropdown:hover .drop-content { display: block; }
+        .drop-content button {
+            width: 100%; padding: 11px 14px; background: none; border: none;
+            color: #ccc; text-align: left; cursor: pointer; font-size: 12px;
+        }
+        .drop-content button:hover { background: var(--accent); color: #fff; }
+
+        footer { background: #000; padding: 16px 20px; display: flex; justify-content: center; gap: 24px; }
+        .nav-btn {
+            padding: 10px 40px; cursor: pointer; background: #1a1a1a; color: #ccc;
+            border: 1px solid #2a2a2a; border-radius: 4px; font-weight: 700;
+            font-size: 12px; letter-spacing: 0.06em; transition: background 0.2s, color 0.2s;
+        }
+        .nav-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        #landing-page { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; gap: 16px; }
+        #landing-page h1 { font-size: 2.4rem; letter-spacing: -0.02em; margin: 0 0 8px; }
+        #landing-page p { color: #555; font-size: 13px; margin: 0 0 16px; }
+        .btn-load {
+            background: var(--accent); color: white; padding: 14px 48px;
+            border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px;
+            letter-spacing: 0.06em; transition: opacity 0.2s;
+        }
+        .btn-load:hover { opacity: 0.85; }
+
+        #panel-pages::-webkit-scrollbar, #panel-info::-webkit-scrollbar { width: 4px; }
+        #panel-pages::-webkit-scrollbar-track, #panel-info::-webkit-scrollbar-track { background: transparent; }
+        #panel-pages::-webkit-scrollbar-thumb, #panel-info::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <button id="sidebar-toggle" onclick="toggleSidebar()">▶</button>
+
+        <div id="sidebar-tabs">
+            <div class="stab active" id="tab-pages" onclick="switchTab('pages')">📄 Pages</div>
+            <div class="stab" id="tab-info" onclick="switchTab('info')">ℹ Info</div>
+        </div>
+
+        <div id="panel-pages"></div>
+
+        <div id="panel-info">
+            <div id="info-cover-wrap">
+                <img id="info-cover" alt="Portada">
+            </div>
+            <div class="info-empty" id="info-no-data">No Info</div>
+        </div>
+    </div>
+
+    <div id="landing-page">
+        <h1>Comic<span style="color:var(--accent)">Reader</span></h1>
+        <p>Open yout Comic</p>
+        <label for="fileInput" class="btn-load">Upload File</label>
+        <input type="file" id="fileInput" accept=".cbz,.zip" style="display:none">
+    </div>
+
+    <div id="reader-page">
+        <header>
+            <button onclick="location.reload()" style="background:none; border:none; color:#444; cursor:pointer; font-size:12px; letter-spacing:0.04em;">← Close</button>
+            <div class="hdr-btns">
+                <div class="dropdown">
+                    <button class="drop-btn">View ▾</button>
+                    <div class="drop-content">
+                        <button onclick="updateVMode('single')">One Page</button>
+                        <button onclick="updateVMode('double')">Double Page</button>
+                    </div>
+                </div>
+                <div class="dropdown">
+                    <button class="drop-btn">Reading ▾</button>
+                    <div class="drop-content">
+                        <button onclick="updateFMode('comic')">Cómic (L→R)</button>
+                        <button onclick="updateFMode('manga')">Manga (R←L)</button>
+                    </div>
+                </div>
+            </div>
+            <span style="font-size:10px; color:#333; letter-spacing:0.1em;">v3.1</span>
+        </header>
+
+        <div id="progress-wrapper" onclick="jumpTo(event)">
+            <div id="progress-fill"></div>
+            <div id="progress-info">Loading...</div>
+        </div>
+
+        <div id="viewer-container">
+            <div id="canvas" class="view-canvas">
+                <img id="imgL" class="comic-img">
+                <img id="imgR" class="comic-img">
+            </div>
+        </div>
+
+        <footer>
+            <button class="nav-btn" onclick="changeP(-1)">◀ PREVIOUS</button>
+            <button class="nav-btn" onclick="changeP(1)">NEXT ▶</button>
+        </footer>
+    </div>
+
+    <script>
+        let images = [];
+        let index = 0;
+        let vMode = 'double';
+        let fMode = 'comic';
+        let comicMetadata = null;
+
+        const fileInput = document.getElementById('fileInput');
+
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const zip = await JSZip.loadAsync(file);
+
+            const xmlFile = zip.file("ComicInfo.xml");
+            if (xmlFile) {
+                const xmlText = await xmlFile.async("string");
+                parseComicInfo(xmlText);
+            }
+
+            const files = Object.keys(zip.files)
+                .filter(n => /\.(jpg|jpeg|png|webp)$/i.test(n))
+                .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+            images = await Promise.all(files.map(async n =>
+                URL.createObjectURL(await zip.files[n].async('blob'))
+            ));
+
+            generateThumbs();
+
+            if (images.length > 0) {
+                const cover = document.getElementById('info-cover');
+                cover.src = images[0];
+                cover.style.display = 'block';
+            }
+
+            document.getElementById('landing-page').style.display = 'none';
+            document.getElementById('reader-page').style.display = 'flex';
+            render();
+        };
+
+        function parseComicInfo(xmlText) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+            const getTag = (tag) => xmlDoc.getElementsByTagName(tag)[0]?.textContent?.trim() || null;
+
+            comicMetadata = {
+                title:      getTag("Title"),
+                series:     getTag("Series"),
+                number:     getTag("Number"),
+                writer:     getTag("Writer"),
+                penciller:  getTag("Penciller"),
+                inker:      getTag("Inker"),
+                colorist:   getTag("Colorist"),
+                publisher:  getTag("Publisher"),
+                year:       getTag("Year"),
+                month:      getTag("Month"),
+                genre:      getTag("Genre"),
+                pageCount:  getTag("PageCount"),
+                language:   getTag("LanguageISO"),
+                summary:    getTag("Summary"),
+            };
+
+            buildInfoPanel();
+        }
+
+        function buildInfoPanel() {
+            const panel = document.getElementById('panel-info');
+            const noData = document.getElementById('info-no-data');
+            if (!comicMetadata) return;
+
+            noData.style.display = 'none';
+
+            const m = comicMetadata;
+            const seriesNum = [m.series, m.number ? '#' + m.number : null].filter(Boolean).join(' ');
+            const fecha = [m.month, m.year].filter(Boolean).join('/');
+
+            const fields = [
+                { lbl: 'Serie',       val: seriesNum || m.title },
+                { lbl: 'Title',      val: m.title },
+                { lbl: 'Guion',       val: m.writer },
+                { lbl: 'Penciller',      val: m.penciller },
+                { lbl: 'Inker',   val: m.inker },
+                { lbl: 'Color',       val: m.colorist },
+                { lbl: 'Editorial',   val: m.publisher },
+                { lbl: 'Year',       val: m.year },
+                { lbl: 'Genre',      val: m.genre },
+                { lbl: 'Pages',     val: m.pageCount },
+                { lbl: 'Language',      val: m.language },
+            ].filter(f => f.val);
+
+            let html = '';
+            if (m.series || m.title) {
+                html += `<div class="info-title">${m.series || m.title}</div>`;
+                if (m.number) html += `<div class="info-subtitle">Número #${m.number}</div>`;
+            }
+            html += '<div class="info-divider"></div>';
+
+            fields.forEach(f => {
+                if (f.lbl === 'Serie' || f.lbl === 'Título' && m.series) return; // evitar duplicado
+                html += `<div class="info-row"><span class="lbl">${f.lbl}</span><span class="val">${f.val}</span></div>`;
+            });
+
+            if (m.summary) {
+                html += '<div class="info-divider"></div>';
+                html += `<div class="info-row"><span class="lbl">Sinopsis</span><span class="val">${m.summary}</span></div>`;
+            }
+
+            const cover = document.getElementById('info-cover-wrap');
+            cover.insertAdjacentHTML('afterend', html);
+        }
+
+        function switchTab(tab) {
+            const pagePanel = document.getElementById('panel-pages');
+            const infoPanel = document.getElementById('panel-info');
+            document.getElementById('tab-pages').classList.toggle('active', tab === 'pages');
+            document.getElementById('tab-info').classList.toggle('active', tab === 'info');
+            pagePanel.style.display   = tab === 'pages' ? 'flex' : 'none';
+            infoPanel.classList.toggle('visible', tab === 'info');
+        }
+
+        function generateThumbs() {
+            const tc = document.getElementById('panel-pages');
+            tc.innerHTML = images.map((src, i) => `
+                <img src="${src}" class="thumb-item" onclick="goToPage(${i})" loading="lazy" title="Pág. ${i + 1}">
+            `).join('');
+        }
+
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            sb.classList.toggle('open');
+            document.getElementById('reader-page').classList.toggle('shifted');
+            document.getElementById('sidebar-toggle').innerText = sb.classList.contains('open') ? '◀' : '▶';
+        }
+
+        function render() {
+            const L = document.getElementById('imgL');
+            const R = document.getElementById('imgR');
+            if (!L) return;
+
+            const isCover = (index === 0);
+
+            if (isCover) {
+
+                L.src = images[0];
+                L.classList.add('is-cover');
+                L.style.display = 'block';
+                L.style.maxWidth = '';
+                R.style.display = 'none';
+            } else if (vMode === 'single') {
+                L.src = images[index];
+                L.classList.remove('is-cover');
+                L.style.display = 'block';
+                R.style.display = 'none';
+            } else {
+
+                L.classList.remove('is-cover');
+                if (fMode === 'manga') {
+
+                    R.src = images[index];
+                    L.src = images[index + 1] || '';
+                    R.style.display = 'block';
+                    L.style.display = images[index + 1] ? 'block' : 'none';
+                } else {
+
+                    L.src = images[index];
+                    R.src = images[index + 1] || '';
+                    L.style.display = 'block';
+                    R.style.display = images[index + 1] ? 'block' : 'none';
+                }
+            }
+
+            updateBar();
+            highlightThumb();
+        }
+
+        function changeP(d) {
+            if (vMode === 'single' || index === 0) {
+
+                const n = index + d;
+                if (n >= 0 && n < images.length) { index = n; render(); }
+            } else {
+
+                let n = index + (d * 2);
+                if (d < 0 && n <= 0) n = 0;          // asegurar portada sola
+                if (n >= 0 && n < images.length) { index = n; render(); }
+            }
+        }
+
+        function goToPage(i) { index = i; render(); }
+
+        function updateVMode(m) { vMode = m; render(); }
+        function updateFMode(m) { fMode = m; render(); }
+
+        function updateBar() {
+            const total = images.length;
+            const pct = Math.round(((index + 1) / total) * 100);
+            document.getElementById('progress-fill').style.width = pct + '%';
+            document.getElementById('progress-info').innerText = `Pág. ${index + 1} / ${total}`;
+        }
+
+        function highlightThumb() {
+            const thumbs = document.querySelectorAll('.thumb-item');
+            thumbs.forEach((t, i) => t.classList.toggle('active', i === index));
+            const active = document.querySelector('.thumb-item.active');
+            if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+
+        function jumpTo(e) {
+            const rect = document.getElementById('progress-wrapper').getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+            index = Math.floor(pct * images.length);
+            render();
+        }
+
+        window.onkeydown = (e) => {
+            if (e.key === 'ArrowRight') fMode === 'manga' ? changeP(-1) : changeP(1);
+            if (e.key === 'ArrowLeft')  fMode === 'manga' ? changeP(1)  : changeP(-1);
+        };
+    </script>
+</body>
+</html>
