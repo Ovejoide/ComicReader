@@ -28,7 +28,6 @@
             touch-action: manipulation;
         }
 
-        /* ── SIDEBAR ─────────────────────────────────── */
         #sidebar {
             position: fixed; left: calc(var(--sidebar-w) * -1); top: 0;
             width: var(--sidebar-w); height: 100%;
@@ -77,7 +76,6 @@
         .info-row .val { font-size: 13px; color: #ccc; line-height: 1.4; }
         .info-empty { color: #444; font-size: 13px; text-align: center; margin-top: 30px; }
 
-        /* ── READER PAGE ─────────────────────────────── */
         #reader-page { display: none; flex-direction: column; height: 100vh; height: 100dvh; transition: margin-left 0.3s; }
         #reader-page.shifted { margin-left: var(--sidebar-w); }
 
@@ -111,7 +109,6 @@
         .is-cover { max-width: 100% !important; animation: entradaComic 0.6s ease-out forwards; }
         @keyframes entradaComic { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
 
-        /* Mobile swipe hint */
         #swipe-hint {
             position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
             font-size: 10px; color: #333; letter-spacing: 0.08em; pointer-events: none;
@@ -152,7 +149,6 @@
         }
         .nav-btn:hover, .nav-btn:active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-        /* ── LANDING PAGE ────────────────────────────── */
         #landing-page {
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             height: 100vh; height: 100dvh; gap: 14px; padding: 20px; text-align: center;
@@ -167,7 +163,6 @@
         }
         .btn-load:hover, .btn-load:active { opacity: 0.85; }
 
-        /* ── GITHUB WIDGET (bottom-left, pixel art) ──── */
         #github-dock {
             position: fixed; bottom: 16px; left: 16px;
             display: flex; flex-direction: column; gap: 8px;
@@ -206,7 +201,6 @@
             box-shadow: 3px 3px 0 #000;
         }
 
-        /* pixel "dot" decoration */
         .gh-btn::before {
             content: '▶';
             font-size: 5px;
@@ -215,12 +209,10 @@
         }
         .gh-btn:hover::before, .gh-btn:active::before { color: #fff; }
 
-        /* ── SCROLLBARS ──────────────────────────────── */
         #panel-pages::-webkit-scrollbar, #panel-info::-webkit-scrollbar { width: 4px; }
         #panel-pages::-webkit-scrollbar-track, #panel-info::-webkit-scrollbar-track { background: transparent; }
         #panel-pages::-webkit-scrollbar-thumb, #panel-info::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 
-        /* ── MOBILE BREAKPOINTS ──────────────────────── */
         @media (max-width: 600px) {
             .comic-img { max-width: 50%; max-height: 100%; }
             .comic-img.single, .is-cover { max-width: 100% !important; }
@@ -241,7 +233,6 @@
 </head>
 <body>
 
-    <!-- ── SIDEBAR ────────────────────────────────────── -->
     <div id="sidebar">
         <button id="sidebar-toggle" onclick="toggleSidebar()">▶</button>
 
@@ -260,7 +251,6 @@
         </div>
     </div>
 
-    <!-- ── LANDING PAGE ───────────────────────────────── -->
     <div id="landing-page">
         <h1>Comic<span style="color:var(--accent)">Reader</span></h1>
         <p>Open your Comic</p>
@@ -268,7 +258,6 @@
         <input type="file" id="fileInput" accept=".cbz,.zip" style="display:none">
     </div>
 
-    <!-- ── READER PAGE ────────────────────────────────── -->
     <div id="reader-page">
         <header>
             <button id="close-btn" onclick="location.reload()">← Close</button>
@@ -310,7 +299,6 @@
         </footer>
     </div>
 
-    <!-- ── GITHUB DOCK (always visible, bottom-left) ── -->
     <div id="github-dock">
         <a class="gh-btn" href="https://github.com/Ovejoide" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
@@ -330,7 +318,6 @@
         let fMode = 'comic';
         let comicMetadata = null;
 
-        // Auto-switch to single page on mobile
         if (window.innerWidth <= 600) { vMode = 'single'; }
 
         const fileInput = document.getElementById('fileInput');
@@ -369,7 +356,6 @@
             setupSwipe();
         };
 
-        /* ── PARSE CBZ METADATA ─────────────── */
         function parseComicInfo(xmlText) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlText, "text/xml");
@@ -438,7 +424,6 @@
             cover.insertAdjacentHTML('afterend', html);
         }
 
-        /* ── TABS ───────────────────────────── */
         function switchTab(tab) {
             const pagePanel = document.getElementById('panel-pages');
             const infoPanel = document.getElementById('panel-info');
@@ -448,7 +433,6 @@
             infoPanel.classList.toggle('visible', tab === 'info');
         }
 
-        /* ── THUMBS ─────────────────────────── */
         function generateThumbs() {
             const tc = document.getElementById('panel-pages');
             tc.innerHTML = images.map((src, i) => `
@@ -456,7 +440,6 @@
             `).join('');
         }
 
-        /* ── SIDEBAR ────────────────────────── */
         function toggleSidebar() {
             const sb = document.getElementById('sidebar');
             sb.classList.toggle('open');
@@ -464,7 +447,6 @@
             document.getElementById('sidebar-toggle').innerText = sb.classList.contains('open') ? '◀' : '▶';
         }
 
-        /* ── DROPDOWNS (tap-friendly) ───────── */
         function toggleDropdown(id) {
             const dd = document.getElementById(id);
             const wasOpen = dd.classList.contains('open');
@@ -478,7 +460,6 @@
             if (!e.target.closest('.dropdown')) closeDropdowns();
         });
 
-        /* ── RENDER ─────────────────────────── */
         function render() {
             const L = document.getElementById('imgL');
             const R = document.getElementById('imgR');
@@ -552,7 +533,6 @@
             render();
         }
 
-        /* ── SWIPE GESTURES ─────────────────── */
         function setupSwipe() {
             const vc = document.getElementById('viewer-container');
             let startX = 0, startY = 0;
@@ -575,13 +555,11 @@
             }, { passive: true });
         }
 
-        /* ── KEYBOARD ───────────────────────── */
         window.onkeydown = (e) => {
             if (e.key === 'ArrowRight') fMode === 'manga' ? changeP(-1) : changeP(1);
             if (e.key === 'ArrowLeft')  fMode === 'manga' ? changeP(1)  : changeP(-1);
         };
 
-        /* ── RESIZE ─────────────────────────── */
         window.addEventListener('resize', () => {
             if (images.length > 0) render();
         });
