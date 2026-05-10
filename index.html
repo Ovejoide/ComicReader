@@ -10,6 +10,8 @@
     <title>ComicReader Free</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- node-unrar-js: soporte CBR/RAR via WebAssembly -->
+    <script src="https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.0/esm/js/unrar.min.js"></script>
     <style>
         :root {
             --bg-color: #0a0a0a;
@@ -253,9 +255,9 @@
 
     <div id="landing-page">
         <h1>Comic<span style="color:var(--accent)">Reader</span></h1>
-        <p>Open your Comic</p>
+        <p>Open your Comic (.cbz / .cbr)</p>
         <label for="fileInput" class="btn-load">Upload File</label>
-        <input type="file" id="fileInput" accept=".cbz,.zip" style="display:none">
+        <input type="file" id="fileInput" accept=".cbz,.cbr,.zip,.rar" style="display:none">
     </div>
 
     <div id="reader-page">
@@ -277,7 +279,7 @@
                     </div>
                 </div>
             </div>
-            <span style="font-size:9px; color:#333; letter-spacing:0.1em;">v3.1</span>
+            <span style="font-size:9px; color:#333; letter-spacing:0.1em;">v3.2</span>
         </header>
 
         <div id="progress-wrapper" onclick="jumpTo(event)">
@@ -322,10 +324,9 @@
 
         const fileInput = document.getElementById('fileInput');
 
-        fileInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+        // --- Loader helpers ---
 
+        async function loadCBZ(file) {
             const zip = await JSZip.loadAsync(file);
 
             const xmlFile = zip.file("ComicInfo.xml");
@@ -335,12 +336,93 @@
             }
 
             const files = Object.keys(zip.files)
-                .filter(n => /\.(jpg|jpeg|png|webp)$/i.test(n))
+                .filter(n => /\.(jpg|jpeg|png|webp|gif)$/i.test(n))
                 .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-            images = await Promise.all(files.map(async n =>
+            return Promise.all(files.map(async n =>
                 URL.createObjectURL(await zip.files[n].async('blob'))
             ));
+        }
+
+        async function loadCBR(file) {
+            // Read file as ArrayBuffer
+            const buf = await file.arrayBuffer();
+            const uint8 = new Uint8Array(buf);
+
+            // Validate RAR magic bytes: 52 61 72 21 (Rar!)
+            const isRar4 = uint8[0]===0x52 && uint8[1]===0x61 && uint8[2]===0x72 && uint8[3]===0x21;
+            const isRar5 = uint8[0]===0x52 && uint8[1]===0x61 && uint8[2]===0x72 && uint8[3]===0x21 && uint8[4]===0x1A && uint8[5]===0x07 && uint8[6]===0x01;
+
+            if (!isRar4 && !isRar5) {
+                // Maybe it's a ZIP renamed as .cbr — try JSZip as fallback
+                try { return await loadCBZ(file); } catch(_) {}
+                throw new Error('El archivo no es un RAR válido ni un ZIP.');
+            }
+
+            // Use unrar-wasm loaded via CDN (UMD bundle)
+            if (typeof window.createExtractorFromData === 'undefined') {
+                await loadScript('https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.0/esm/js/unrar.min.js');
+            }
+
+            const extractor = await window.createExtractorFromData({ data: buf });
+            const extracted = extractor.extract({ files: (hdr) => /\.(jpg|jpeg|png|webp|gif)$/i.test(hdr.name) });
+
+            const fileList = [...extracted.files];
+            fileList.sort((a, b) => a.fileHeader.name.localeCompare(b.fileHeader.name, undefined, { numeric: true }));
+
+            // Try ComicInfo.xml if present
+            try {
+                const xmlExtractor = await window.createExtractorFromData({ data: buf });
+                const xmlResult = xmlExtractor.extract({ files: (hdr) => hdr.name === 'ComicInfo.xml' });
+                const xmlFiles = [...xmlResult.files];
+                if (xmlFiles.length > 0 && xmlFiles[0].extraction) {
+                    const xmlText = new TextDecoder().decode(xmlFiles[0].extraction);
+                    parseComicInfo(xmlText);
+                }
+            } catch(_) {}
+
+            return fileList
+                .filter(f => f.extraction)
+                .map(f => {
+                    const ext = f.fileHeader.name.split('.').pop().toLowerCase();
+                    const mimeMap = { jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', webp:'image/webp', gif:'image/gif' };
+                    const mime = mimeMap[ext] || 'image/jpeg';
+                    const blob = new Blob([f.extraction], { type: mime });
+                    return URL.createObjectURL(blob);
+                });
+        }
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = () => reject(new Error('No se pudo cargar la librería RAR: ' + src));
+                document.head.appendChild(s);
+            });
+        }
+
+        function setLoadingState(on) {
+            const lbl = document.querySelector('.btn-load');
+            if (lbl) lbl.textContent = on ? 'Cargando…' : 'Upload File';
+        }
+
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            setLoadingState(true);
+
+            try {
+                const isCBR = /\.cbr$/i.test(file.name) || /\.rar$/i.test(file.name);
+                images = isCBR ? await loadCBR(file) : await loadCBZ(file);
+            } catch (err) {
+                setLoadingState(false);
+                alert('Error al abrir el archivo:\n' + err.message);
+                return;
+            }
+
+            setLoadingState(false);
 
             generateThumbs();
 
