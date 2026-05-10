@@ -211,6 +211,33 @@
         }
         .gh-btn:hover::before, .gh-btn:active::before { color: #fff; }
 
+        /* Zoom controls */
+        #zoom-controls {
+            display: flex; align-items: center; gap: 4px;
+        }
+        .zoom-btn {
+            background: #1a1a1a; color: #ccc; border: 1px solid #2a2a2a;
+            width: 36px; height: 36px; border-radius: 4px; cursor: pointer;
+            font-size: 16px; font-weight: 700; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s, color 0.2s; min-height: 44px; min-width: 36px;
+        }
+        .zoom-btn:hover, .zoom-btn:active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        #zoom-label {
+            font-size: 10px; color: #555; min-width: 36px; text-align: center;
+            letter-spacing: 0.04em; font-weight: 700; user-select: none;
+        }
+
+        #viewer-container {
+            overflow: hidden;
+        }
+        #canvas {
+            transform-origin: center center;
+            transition: transform 0.15s ease;
+            cursor: grab;
+        }
+        #canvas.dragging { cursor: grabbing; transition: none; }
+
         #panel-pages::-webkit-scrollbar, #panel-info::-webkit-scrollbar { width: 4px; }
         #panel-pages::-webkit-scrollbar-track, #panel-info::-webkit-scrollbar-track { background: transparent; }
         #panel-pages::-webkit-scrollbar-thumb, #panel-info::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
@@ -264,6 +291,12 @@
         <header>
             <button id="close-btn" onclick="location.reload()">← Close</button>
             <div class="hdr-btns">
+                <div id="zoom-controls">
+                    <button class="zoom-btn" onclick="changeZoom(-0.25)" title="Zoom Out">−</button>
+                    <span id="zoom-label">100%</span>
+                    <button class="zoom-btn" onclick="changeZoom(0.25)" title="Zoom In">+</button>
+                    <button class="zoom-btn" onclick="resetZoom()" title="Reset Zoom" style="font-size:11px;">⊙</button>
+                </div>
                 <div class="dropdown" id="dd-view">
                     <button class="drop-btn" onclick="toggleDropdown('dd-view')">View ▾</button>
                     <div class="drop-content">
@@ -436,6 +469,7 @@
             document.getElementById('reader-page').style.display = 'flex';
             render();
             setupSwipe();
+            setupZoomEvents();
         };
 
         function parseComicInfo(xmlText) {
@@ -580,6 +614,7 @@
 
         function changeP(d) {
             const isMobile = window.innerWidth <= 600;
+            resetZoom();
             if (vMode === 'single' || index === 0 || isMobile) {
                 const n = index + d;
                 if (n >= 0 && n < images.length) { index = n; render(); }
@@ -590,7 +625,7 @@
             }
         }
 
-        function goToPage(i) { index = i; render(); }
+        function goToPage(i) { index = i; resetZoom(); render(); }
         function updateVMode(m) { vMode = m; render(); }
         function updateFMode(m) { fMode = m; render(); }
 
@@ -627,6 +662,7 @@
             vc.addEventListener('touchend', (e) => {
                 const dx = e.changedTouches[0].clientX - startX;
                 const dy = e.changedTouches[0].clientY - startY;
+                if (zoomLevel > 1) return; // panning handled by zoom events
                 if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
                     if (dx < 0) {
                         fMode === 'manga' ? changeP(-1) : changeP(1);
@@ -637,9 +673,129 @@
             }, { passive: true });
         }
 
+        // --- Zoom state ---
+        let zoomLevel = 1;
+        const ZOOM_MIN = 0.5;
+        const ZOOM_MAX = 4;
+        let panX = 0, panY = 0;
+        let isPanning = false, panStartX = 0, panStartY = 0, panOriginX = 0, panOriginY = 0;
+
+        function applyZoom() {
+            const canvas = document.getElementById('canvas');
+            canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+            document.getElementById('zoom-label').textContent = Math.round(zoomLevel * 100) + '%';
+        }
+
+        function changeZoom(delta) {
+            zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomLevel + delta));
+            if (zoomLevel === 1) { panX = 0; panY = 0; }
+            applyZoom();
+        }
+
+        function resetZoom() {
+            zoomLevel = 1; panX = 0; panY = 0;
+            applyZoom();
+        }
+
+        function clampPan() {
+            const vc = document.getElementById('viewer-container');
+            const canvas = document.getElementById('canvas');
+            const vcW = vc.clientWidth, vcH = vc.clientHeight;
+            const cW = canvas.clientWidth, cH = canvas.clientHeight;
+            const maxX = Math.max(0, (cW * zoomLevel - vcW) / 2);
+            const maxY = Math.max(0, (cH * zoomLevel - vcH) / 2);
+            panX = Math.min(maxX, Math.max(-maxX, panX));
+            panY = Math.min(maxY, Math.max(-maxY, panY));
+        }
+
+        function setupZoomEvents() {
+            const vc = document.getElementById('viewer-container');
+
+            // Mouse wheel zoom
+            vc.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY < 0 ? 0.15 : -0.15;
+                zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomLevel + delta));
+                if (zoomLevel === 1) { panX = 0; panY = 0; }
+                clampPan();
+                applyZoom();
+            }, { passive: false });
+
+            // Mouse drag pan
+            vc.addEventListener('mousedown', (e) => {
+                if (zoomLevel <= 1) return;
+                isPanning = true;
+                panStartX = e.clientX - panX;
+                panStartY = e.clientY - panY;
+                document.getElementById('canvas').classList.add('dragging');
+            });
+            window.addEventListener('mousemove', (e) => {
+                if (!isPanning) return;
+                panX = e.clientX - panStartX;
+                panY = e.clientY - panStartY;
+                clampPan();
+                applyZoom();
+            });
+            window.addEventListener('mouseup', () => {
+                isPanning = false;
+                document.getElementById('canvas').classList.remove('dragging');
+            });
+
+            // Touch: pinch-to-zoom + pan
+            let lastDist = null;
+            let lastMidX = 0, lastMidY = 0;
+            let touchPanStartX = 0, touchPanStartY = 0;
+            let touchPanOriginX = 0, touchPanOriginY = 0;
+            let isTouchPanning = false;
+
+            vc.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    lastDist = null;
+                    isTouchPanning = false;
+                } else if (e.touches.length === 1 && zoomLevel > 1) {
+                    isTouchPanning = true;
+                    touchPanStartX = e.touches[0].clientX;
+                    touchPanStartY = e.touches[0].clientY;
+                    touchPanOriginX = panX;
+                    touchPanOriginY = panY;
+                }
+            }, { passive: true });
+
+            vc.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (lastDist !== null) {
+                        const scale = dist / lastDist;
+                        zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomLevel * scale));
+                        if (zoomLevel === 1) { panX = 0; panY = 0; }
+                        clampPan();
+                        applyZoom();
+                    }
+                    lastDist = dist;
+                } else if (e.touches.length === 1 && isTouchPanning && zoomLevel > 1) {
+                    e.preventDefault();
+                    panX = touchPanOriginX + (e.touches[0].clientX - touchPanStartX);
+                    panY = touchPanOriginY + (e.touches[0].clientY - touchPanStartY);
+                    clampPan();
+                    applyZoom();
+                }
+            }, { passive: false });
+
+            vc.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) lastDist = null;
+                if (e.touches.length === 0) isTouchPanning = false;
+            }, { passive: true });
+        }
+
         window.onkeydown = (e) => {
             if (e.key === 'ArrowRight') fMode === 'manga' ? changeP(-1) : changeP(1);
             if (e.key === 'ArrowLeft')  fMode === 'manga' ? changeP(1)  : changeP(-1);
+            if (e.key === '+' || e.key === '=') changeZoom(0.25);
+            if (e.key === '-') changeZoom(-0.25);
+            if (e.key === '0') resetZoom();
         };
 
         window.addEventListener('resize', () => {
