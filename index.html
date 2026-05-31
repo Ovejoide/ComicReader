@@ -8,6 +8,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>ComicReader Free</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="cover.css">
+    <link rel="stylesheet" href="transition.css">
+    <link rel="stylesheet" href="loading.css">
+    <link rel="stylesheet" href="charge_button.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
@@ -105,15 +109,12 @@
             box-shadow: 0 0 30px rgba(0,0,0,0.7);
         }
         .comic-img.single { max-width: 100%; }
-        .is-cover { max-width: 100% !important; animation: entradaComic 0.6s ease-out forwards; }
-        @keyframes entradaComic { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
+        .is-cover { max-width: 100% !important; }
 
         #swipe-hint {
             position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
             font-size: 10px; color: #333; letter-spacing: 0.08em; pointer-events: none;
-            animation: fadeHint 3s ease-out forwards;
         }
-        @keyframes fadeHint { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
 
         /* Header buttons — desktop dropdown style */
         .hdr-btns { display: flex; gap: 6px; align-items: center; }
@@ -225,10 +226,8 @@
             letter-spacing: 0.04em; font-weight: 700; user-select: none;
         }
 
-        #viewer-container {
-            overflow: hidden;
-        }
         #canvas {
+            width: 100%; height: 100%;
             transform-origin: center center;
             transition: transform 0.15s ease;
             cursor: grab;
@@ -318,9 +317,11 @@
         </div>
 
         <div id="viewer-container">
-            <div id="canvas" class="view-canvas">
-                <img id="imgL" class="comic-img">
-                <img id="imgR" class="comic-img">
+            <div id="canvas">
+                <div id="page-wrapper" class="view-canvas">
+                    <img id="imgL" class="comic-img">
+                    <img id="imgR" class="comic-img">
+                </div>
             </div>
             <div id="swipe-hint">← SWIPE →</div>
         </div>
@@ -457,7 +458,7 @@
 
             document.getElementById('landing-page').style.display = 'none';
             document.getElementById('reader-page').style.display = 'flex';
-            render();
+            render(true);
             setupSwipe();
             setupZoomEvents();
         };
@@ -566,40 +567,53 @@
             if (!e.target.closest('.dropdown')) closeDropdowns();
         });
 
-        function render() {
+        function render(isInitial = false) {
             const L = document.getElementById('imgL');
             const R = document.getElementById('imgR');
+            const pw = document.getElementById('page-wrapper');
             if (!L) return;
 
-            const isCover = (index === 0);
-            const isMobile = window.innerWidth <= 600;
+            if (!isInitial) pw.classList.add('page-exit');
 
-            L.classList.remove('single');
-            R.classList.remove('single');
+            const snapIndex = index;
+            const snapVMode = vMode;
+            const snapFMode = fMode;
 
-            if (isCover || vMode === 'single' || isMobile) {
-                L.src = images[index];
-                L.classList.add(isCover ? 'is-cover' : 'single');
-                if (!isCover) L.classList.remove('is-cover');
-                L.style.display = 'block';
-                R.style.display = 'none';
-            } else {
-                L.classList.remove('is-cover');
-                if (fMode === 'manga') {
-                    R.src = images[index];
-                    L.src = images[index + 1] || '';
-                    R.style.display = 'block';
-                    L.style.display = images[index + 1] ? 'block' : 'none';
-                } else {
-                    L.src = images[index];
-                    R.src = images[index + 1] || '';
+            setTimeout(() => {
+                const isCover = (snapIndex === 0);
+                const isMobile = window.innerWidth <= 600;
+
+                pw.classList.remove('page-exit');
+                L.classList.remove('single', 'is-cover');
+                R.classList.remove('single');
+
+                if (isCover || snapVMode === 'single' || isMobile) {
+                    L.src = images[snapIndex];
+                    L.classList.add(isCover ? 'is-cover' : 'single');
                     L.style.display = 'block';
-                    R.style.display = images[index + 1] ? 'block' : 'none';
+                    R.style.display = 'none';
+                } else {
+                    if (snapFMode === 'manga') {
+                        R.src = images[snapIndex];
+                        L.src = images[snapIndex + 1] || '';
+                        R.style.display = 'block';
+                        L.style.display = images[snapIndex + 1] ? 'block' : 'none';
+                    } else {
+                        L.src = images[snapIndex];
+                        R.src = images[snapIndex + 1] || '';
+                        L.style.display = 'block';
+                        R.style.display = images[snapIndex + 1] ? 'block' : 'none';
+                    }
                 }
-            }
 
-            updateBar();
-            highlightThumb();
+                if (!isInitial) {
+                    pw.classList.add('page-enter');
+                    setTimeout(() => pw.classList.remove('page-enter'), 500);
+                }
+
+                updateBar();
+                highlightThumb();
+            }, isInitial ? 0 : 300);
         }
 
         function changeP(d) {
