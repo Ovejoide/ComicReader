@@ -612,13 +612,12 @@
             renderTimer = setTimeout(() => {
                 renderTimer = null;
                 const isCover = (snapIndex === 0);
-                const isMobile = window.innerWidth <= 600;
 
                 pw.classList.remove('page-exit');
                 L.classList.remove('single', 'is-cover');
                 R.classList.remove('single');
 
-                if (isCover || snapVMode === 'single' || isMobile) {
+                if (isCover || snapVMode === 'single') {
                     L.src = images[snapIndex];
                     L.classList.add(isCover ? 'is-cover' : 'single');
                     L.style.display = 'block';
@@ -648,9 +647,8 @@
         }
 
         function changeP(d) {
-            const isMobile = window.innerWidth <= 600;
             resetZoom();
-            if (vMode === 'single' || index === 0 || isMobile) {
+            if (vMode === 'single' || index === 0) {
                 const n = index + d;
                 if (n >= 0 && n < images.length) { index = n; render(); }
             } else {
