@@ -7,6 +7,10 @@
 }
 
 @keyframes slideOut {
+    from {
+        transform: none;
+        opacity: 1;
+    }
     to {
         transform: translateX(-100%) rotateY(-20deg);
         opacity: 0;

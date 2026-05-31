@@ -349,10 +349,21 @@
         let vMode = 'double';
         let fMode = 'comic';
         let comicMetadata = null;
+        let renderTimer = null;
+        let eventsInitialized = false;
 
         if (window.innerWidth <= 600) { vMode = 'single'; }
 
         const fileInput = document.getElementById('fileInput');
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
         // --- Loader helpers ---
 
@@ -446,6 +457,8 @@
                 return;
             }
 
+            index = 0;
+            comicMetadata = null;
             setLoadingState(false);
 
             generateThumbs();
@@ -459,8 +472,11 @@
             document.getElementById('landing-page').style.display = 'none';
             document.getElementById('reader-page').style.display = 'flex';
             render(true);
-            setupSwipe();
-            setupZoomEvents();
+            if (!eventsInitialized) {
+                setupSwipe();
+                setupZoomEvents();
+                eventsInitialized = true;
+            }
         };
 
         function parseComicInfo(xmlText) {
@@ -493,6 +509,10 @@
             const noData = document.getElementById('info-no-data');
             if (!comicMetadata) return;
 
+            Array.from(panel.children).forEach(el => {
+                if (el.id !== 'info-cover-wrap' && el.id !== 'info-no-data') el.remove();
+            });
+
             noData.style.display = 'none';
 
             const m = comicMetadata;
@@ -512,19 +532,19 @@
 
             let html = '';
             if (m.series || m.title) {
-                html += `<div class="info-title">${m.series || m.title}</div>`;
-                if (m.number) html += `<div class="info-subtitle">Número #${m.number}</div>`;
+                html += `<div class="info-title">${escapeHtml(m.series || m.title)}</div>`;
+                if (m.number) html += `<div class="info-subtitle">Número #${escapeHtml(m.number)}</div>`;
             }
             html += '<div class="info-divider"></div>';
 
             fields.forEach(f => {
-                if (f.lbl === 'Serie' || (f.lbl === 'Título' && m.series)) return;
-                html += `<div class="info-row"><span class="lbl">${f.lbl}</span><span class="val">${f.val}</span></div>`;
+                if (f.lbl === 'Serie' || (f.lbl === 'Title' && m.series)) return;
+                html += `<div class="info-row"><span class="lbl">${escapeHtml(f.lbl)}</span><span class="val">${escapeHtml(f.val)}</span></div>`;
             });
 
             if (m.summary) {
                 html += '<div class="info-divider"></div>';
-                html += `<div class="info-row"><span class="lbl">Sinopsis</span><span class="val">${m.summary}</span></div>`;
+                html += `<div class="info-row"><span class="lbl">Sinopsis</span><span class="val">${escapeHtml(m.summary)}</span></div>`;
             }
 
             const cover = document.getElementById('info-cover-wrap');
@@ -573,13 +593,19 @@
             const pw = document.getElementById('page-wrapper');
             if (!L) return;
 
+            if (renderTimer) {
+                clearTimeout(renderTimer);
+                pw.classList.remove('page-exit', 'page-enter');
+            }
+
             if (!isInitial) pw.classList.add('page-exit');
 
             const snapIndex = index;
             const snapVMode = vMode;
             const snapFMode = fMode;
 
-            setTimeout(() => {
+            renderTimer = setTimeout(() => {
+                renderTimer = null;
                 const isCover = (snapIndex === 0);
                 const isMobile = window.innerWidth <= 600;
 
@@ -630,8 +656,8 @@
         }
 
         function goToPage(i) { index = i; resetZoom(); render(); }
-        function updateVMode(m) { vMode = m; render(); }
-        function updateFMode(m) { fMode = m; render(); }
+        function updateVMode(m) { vMode = m; render(true); }
+        function updateFMode(m) { fMode = m; render(true); }
 
         function updateBar() {
             const total = images.length;
@@ -650,7 +676,8 @@
         function jumpTo(e) {
             const rect = document.getElementById('progress-wrapper').getBoundingClientRect();
             const pct = (e.clientX - rect.left) / rect.width;
-            index = Math.floor(pct * images.length);
+            index = Math.min(Math.floor(pct * images.length), images.length - 1);
+            resetZoom();
             render();
         }
 
@@ -682,7 +709,7 @@
         const ZOOM_MIN = 0.5;
         const ZOOM_MAX = 4;
         let panX = 0, panY = 0;
-        let isPanning = false, panStartX = 0, panStartY = 0, panOriginX = 0, panOriginY = 0;
+        let isPanning = false, panStartX = 0, panStartY = 0;
 
         function applyZoom() {
             const canvas = document.getElementById('canvas');
@@ -747,7 +774,6 @@
 
             // Touch: pinch-to-zoom + pan
             let lastDist = null;
-            let lastMidX = 0, lastMidY = 0;
             let touchPanStartX = 0, touchPanStartY = 0;
             let touchPanOriginX = 0, touchPanOriginY = 0;
             let isTouchPanning = false;
@@ -803,7 +829,7 @@
         };
 
         window.addEventListener('resize', () => {
-            if (images.length > 0) render();
+            if (images.length > 0) render(true);
         });
     </script>
 </body>
