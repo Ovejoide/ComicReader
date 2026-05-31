@@ -8,9 +8,9 @@ function setFormat(format) {
 }
 
 function render(isInitial = false) {
-    const leftImg = document.getElementById('leftImg');
-    const rightImg = document.getElementById('rightImg');
-    const pageWrapper = document.getElementById('canvas'); 
+    const leftImg = document.getElementById('imgL');
+    const rightImg = document.getElementById('imgR');
+    const pageWrapper = document.getElementById('canvas');
 
     if (!leftImg || !rightImg) return;
 
@@ -18,22 +18,21 @@ function render(isInitial = false) {
 
     setTimeout(() => {
         pageWrapper.classList.remove('page-exit');
-        
+
         if (currentIndex === 0 || viewMode === 'single') {
             pageWrapper.classList.add('cover-mode');
             leftImg.src = images[currentIndex];
-            rightImg.src = "";
+            rightImg.src = '';
             rightImg.style.display = 'none';
         } else {
             pageWrapper.classList.remove('cover-mode');
-    
- 
+
             if (formatMode === 'manga') {
-                leftImg.src = images[currentIndex + 1] || "";
+                leftImg.src = images[currentIndex + 1] || '';
                 rightImg.src = images[currentIndex];
             } else {
                 leftImg.src = images[currentIndex];
-                rightImg.src = images[currentIndex + 1] || "";
+                rightImg.src = images[currentIndex + 1] || '';
             }
             rightImg.style.display = (currentIndex + 1 < images.length) ? 'block' : 'none';
         }
@@ -46,18 +45,20 @@ function render(isInitial = false) {
     }, isInitial ? 0 : 300);
 }
 
-document.getElementById('nextBtn').onclick = () => {
+document.querySelector('.nav-btn:last-child').onclick = () => {
     let step = (viewMode === 'single' || currentIndex === 0) ? 1 : 2;
-    if (currentIndex + step < images.length) {
-        currentIndex += step;
-        render();
+    if (formatMode === 'manga') {
+        if (currentIndex - step >= 0) { currentIndex -= step; render(); }
+    } else {
+        if (currentIndex + step < images.length) { currentIndex += step; render(); }
     }
 };
 
-document.getElementById('prevBtn').onclick = () => {
-    let step = (currentIndex <= 2 || viewMode === 'single') ? 1 : 2;
-    if (currentIndex - step >= 0) {
-        currentIndex -= step;
-        render();
+document.querySelector('.nav-btn:first-child').onclick = () => {
+    let step = (currentIndex <= 1 || viewMode === 'single') ? 1 : 2;
+    if (formatMode === 'manga') {
+        if (currentIndex + step < images.length) { currentIndex += step; render(); }
+    } else {
+        if (currentIndex - step >= 0) { currentIndex -= step; render(); }
     }
 };

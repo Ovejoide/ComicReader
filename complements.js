@@ -9,10 +9,12 @@ function render(isInitial = false, direction = '') {
         if (currentIndex === 0) {
             pageWrapper.classList.add('cover-mode');
             leftImg.src = images[0];
-            rightImg.classList.add('hidden');
+            rightImg.style.display = 'none';
         } else {
             pageWrapper.classList.remove('cover-mode');
-
+            leftImg.src = images[currentIndex];
+            rightImg.src = images[currentIndex + 1] || '';
+            rightImg.style.display = (currentIndex + 1 < images.length) ? 'block' : 'none';
         }
 
         if (!isInitial) {

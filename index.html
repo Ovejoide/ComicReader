@@ -3,15 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="google-site-verification" content="TU_CODIGO_AQUI" />
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>ComicReader Free</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- node-unrar-js: soporte CBR/RAR via WebAssembly -->
-    <script src="https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.0/esm/js/unrar.min.js"></script>
     <style>
         :root {
             --bg-color: #0a0a0a;
@@ -160,7 +157,7 @@
         .btn-load {
             background: var(--accent); color: white; padding: 16px 48px;
             border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px;
-            letter-spacing: 0.06em; transition: opacity 0.2s; display: inline-block;
+            letter-spacing: 0.06em; transition: opacity 0.2s;
             min-height: 54px; display: flex; align-items: center;
         }
         .btn-load:hover, .btn-load:active { opacity: 0.85; }
@@ -345,7 +342,6 @@
         </a>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script>
         let images = [];
         let index = 0;
@@ -378,26 +374,30 @@
         }
 
         async function loadCBR(file) {
-            // Read file as ArrayBuffer
             const buf = await file.arrayBuffer();
             const uint8 = new Uint8Array(buf);
 
             // Validate RAR magic bytes: 52 61 72 21 (Rar!)
-            const isRar4 = uint8[0]===0x52 && uint8[1]===0x61 && uint8[2]===0x72 && uint8[3]===0x21;
-            const isRar5 = uint8[0]===0x52 && uint8[1]===0x61 && uint8[2]===0x72 && uint8[3]===0x21 && uint8[4]===0x1A && uint8[5]===0x07 && uint8[6]===0x01;
+            const isRar = uint8[0]===0x52 && uint8[1]===0x61 && uint8[2]===0x72 && uint8[3]===0x21;
 
-            if (!isRar4 && !isRar5) {
+            if (!isRar) {
                 // Maybe it's a ZIP renamed as .cbr — try JSZip as fallback
                 try { return await loadCBZ(file); } catch(_) {}
                 throw new Error('El archivo no es un RAR válido ni un ZIP.');
             }
 
-            // Use unrar-wasm loaded via CDN (UMD bundle)
-            if (typeof window.createExtractorFromData === 'undefined') {
-                await loadScript('https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.0/esm/js/unrar.min.js');
+            // Load node-unrar-js as ESM via dynamic import (only once)
+            if (!window._createExtractorFromData) {
+                try {
+                    const mod = await import('https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.0/esm/js/unrar.js');
+                    window._createExtractorFromData = mod.createExtractorFromData;
+                } catch(e) {
+                    throw new Error('No se pudo cargar la librería RAR: ' + e.message);
+                }
             }
+            const createExtractorFromData = window._createExtractorFromData;
 
-            const extractor = await window.createExtractorFromData({ data: buf });
+            const extractor = await createExtractorFromData({ data: buf });
             const extracted = extractor.extract({ files: (hdr) => /\.(jpg|jpeg|png|webp|gif)$/i.test(hdr.name) });
 
             const fileList = [...extracted.files];
@@ -405,7 +405,7 @@
 
             // Try ComicInfo.xml if present
             try {
-                const xmlExtractor = await window.createExtractorFromData({ data: buf });
+                const xmlExtractor = await createExtractorFromData({ data: buf });
                 const xmlResult = xmlExtractor.extract({ files: (hdr) => hdr.name === 'ComicInfo.xml' });
                 const xmlFiles = [...xmlResult.files];
                 if (xmlFiles.length > 0 && xmlFiles[0].extraction) {
@@ -423,16 +423,6 @@
                     const blob = new Blob([f.extraction], { type: mime });
                     return URL.createObjectURL(blob);
                 });
-        }
-
-        function loadScript(src) {
-            return new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = src;
-                s.onload = resolve;
-                s.onerror = () => reject(new Error('No se pudo cargar la librería RAR: ' + src));
-                document.head.appendChild(s);
-            });
         }
 
         function setLoadingState(on) {
